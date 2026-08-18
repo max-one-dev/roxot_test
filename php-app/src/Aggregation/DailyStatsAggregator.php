@@ -38,12 +38,21 @@ final class DailyStatsAggregator
         ]);
 
         $rows = $select->fetchAll();
+
+        $delete = $this->pdo->prepare(
+            'DELETE FROM daily_stats WHERE stat_date = :stat_date AND placement_id = :placement_id'
+        );
+
         $insert = $this->pdo->prepare(
             'INSERT INTO daily_stats (stat_date, placement_id, impressions, clicks, revenue_cents, updated_at)
              VALUES (:stat_date, :placement_id, :impressions, :clicks, :revenue_cents, now())'
         );
 
         foreach ($rows as $row) {
+            $delete->execute([
+                'stat_date'    => $date,
+                'placement_id' => $row['placement_id'],
+            ]);
             $insert->execute([
                 'stat_date' => $date,
                 'placement_id' => $row['placement_id'],
