@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -68,11 +69,32 @@ func handleStat(db *sql.DB) http.HandlerFunc {
 		requestID := query.Get("requestId")
 		occurredAt := parseOccurredAt(query.Get("occurredAt"))
 
+		if placementID == "" || actionType == "" {
+			writeJSON(w, http.StatusBadRequest, statResponse{Status: "error", Error: "missing_params"})
+			return
+		}
+
+		switch actionType {
+		case "impression", "click":
+		default:
+			writeJSON(w, http.StatusBadRequest, statResponse{Status: "error", Error: "unknown_action_type"})
+			return
+		}
+
+		var exists bool
+		err := db.QueryRowContext(r.Context(),
+			`SELECT EXISTS(SELECT 1 FROM placements WHERE id = $1)`, placementID,
+		).Scan(&exists)
+		if err != nil || !exists {
+			writeJSON(w, http.StatusBadRequest, statResponse{Status: "error", Error: "unknown_placement"})
+			return
+		}
+
 		price, _ := strconv.ParseFloat(query.Get("price"), 64)
-		priceCents := int(price)
+		priceCents := int(math.Round(price * 100))
 
 		var eventID int64
-		err := db.QueryRowContext(
+		err = db.QueryRowContext(
 			r.Context(),
 			`INSERT INTO raw_events (placement_id, action_type, price_cents, occurred_at, request_id)
 			 VALUES ($1, $2, $3, $4, $5)
